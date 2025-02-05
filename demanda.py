@@ -5,11 +5,16 @@ import logging
 from google.cloud import pubsub_v1
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
+from faker import Faker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-PROJECT_ID = "edem24-25"
-PUBSUB_TOPIC = "prueba_help"
+
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+PROJECT_ID = config["PROJECT_ID"]
+PUBSUB_TOPIC = config["PUBSUB_TOPIC_HELP"]
 
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, PUBSUB_TOPIC)
@@ -17,6 +22,11 @@ topic_path = publisher.topic_path(PROJECT_ID, PUBSUB_TOPIC)
 TIPOS_NECESIDAD = ["Refugio", "Suministros", "Primeros auxilios", "Rescate"]
 NUMERO_MIN = 1 
 NUMERO_MAX = 10  
+
+fake = Faker("es_ES")
+
+def generador_nombres():
+    return fake.name()
 
 def obtener_ubicacion_aleatoria():
     geolocator = Nominatim(user_agent="geo_valencia")
@@ -40,14 +50,15 @@ def generar_telefono():
 
 def generar_y_enviar_datos():
     datos = {
+        "nombre": generador_nombres(),
+        "contacto": generar_telefono(),
         "tipo_necesidad": random.choice(TIPOS_NECESIDAD),
         "ubicacion": obtener_ubicacion_aleatoria(),
         "numero_personas_afectadas": random.randint(NUMERO_MIN, NUMERO_MAX),
         "nivel_urgencia": random.randint(1, 5),
-        "contacto": generar_telefono()
     }
 
-    datos_json = json.dumps(datos)
+    datos_json = json.dumps(datos, ensure_ascii=False)
     future = publisher.publish(topic_path, data=datos_json.encode("utf-8"))
     message_id = future.result()
 
