@@ -1,0 +1,9 @@
+{
+    "project_id": "<ID>",
+    "subscription_name_solicitantes": "prueba_help-sub",
+    "subscription_name_ofertantes": "prueba_offer_sub",
+    "bq_dataset": "dataset",
+    "bq_table": "table",
+    "bucket_name": "dataflow-dp2"
+  }
+  
