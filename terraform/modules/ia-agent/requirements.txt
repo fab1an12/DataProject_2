@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-dotenv
+langchain
+langchain-openai
+langsmith
+pydantic
+google-cloud-pubsub
+google-cloud-firestore
+requests

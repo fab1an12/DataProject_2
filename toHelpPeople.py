@@ -19,14 +19,9 @@ NUMERO_MIN = 1
 NUMERO_MAX = 10  
 
 def obtener_ubicacion_aleatoria():
-    geolocator = Nominatim(user_agent="geo_valencia")
-    coordenadas = [
-        (39.4699, -0.3763),
-        (39.4828, -0.3945),
-        (39.4370, -0.4650),
-        (39.5950, -0.5319)
-    ]
-    lat, lon = random.choice(coordenadas)
+    geolocator = Nominatim(user_agent="ayudante_geocoder")
+    lat = round(random.uniform(39.0, 39.75), 6)
+    lon = round(random.uniform(-0.8, -0.2), 6)
     try:
         location = geolocator.reverse((lat, lon), exactly_one=True)
         if location:
