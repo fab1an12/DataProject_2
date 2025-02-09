@@ -1,0 +1,4 @@
+google-cloud-pubsub
+Faker
+shapely
+pyproj
