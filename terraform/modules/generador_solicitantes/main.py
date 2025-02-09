@@ -44,6 +44,7 @@ def identificar_pueblo(lat, lon):
 def generador_solicitantes():
     latitud, longitud = generar_coordenadas_aleatorias()
     pueblo = identificar_pueblo(latitud, longitud)
+    
     recursos_ofrecidos = {
     "Refugio": ["1 persona", "2 personas", "3 personas", "4 personas", "5 personas"],
     "Suministros": ["Agua", "Comida enlatada", "Kit de higiene"],
@@ -51,8 +52,10 @@ def generador_solicitantes():
     "Equipos de limpieza": ["Pala", "Botas", "Cubo", "Mascarillas"],
     "Rescate": ["Rescate en edificio", "Rescate en vehículo", "Rescate en garaje"]
     }
+    
     tipo_necesidad = random.choice(list(recursos_ofrecidos.keys()))
     necesidad_especifica = random.choice(recursos_ofrecidos[tipo_necesidad])
+
     datos = {
         "id": str(uuid.uuid4()),
         "Nombre": generador_nombres(),
