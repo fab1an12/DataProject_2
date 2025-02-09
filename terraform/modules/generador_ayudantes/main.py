@@ -11,8 +11,8 @@ from geopy.geocoders import Nominatim
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-PROJECT_ID = "edem24-25"#os.getenv("PROJECT_ID")
-TOPIC_NAME = "prueba_help"#os.getenv("TOPIC_NAME")
+PROJECT_ID = os.getenv("PROJECT_ID")
+TOPIC_NAME = os.getenv("TOPIC_NAME_AYUDANTES")
 
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, TOPIC_NAME)
@@ -44,20 +44,21 @@ def identificar_pueblo(lat, lon):
 def generador_ayudantes():
     latitud, longitud = generar_coordenadas_aleatorias()
     pueblo = identificar_pueblo(latitud, longitud)
-    recursos_ofrecidos = ["Refugio", "Suministros", "Atención médica", "Equipos de limpieza", "Rescate"]
-    numero_min = 1
-    numero_max = 10
-    suministros = ["Agua", "Comida enlatada", "Mantas"]
-    medico = ["Herida leve", "Fractura", "Deshidratación"]
-    herramientas_limpieza = ["Pala", "Botas", "Cubo", "Mascarillas"]
-    rescate = ["Rescate en edificio", "Rescate en vehículo", "Rescate en garaje"]
-    
+    recursos_ofrecidos = {
+    "Refugio": ["1 persona", "2 personas", "3 personas", "4 personas", "5 personas"],
+    "Suministros": ["Agua", "Comida enlatada", "Kit de higiene"],
+    "Atención médica": ["Herida leve", "Fractura", "Deshidratación"],
+    "Equipos de limpieza": ["Pala", "Botas", "Cubo", "Mascarillas"],
+    "Rescate": ["Rescate en edificio", "Rescate en vehículo", "Rescate en garaje"]
+    }
+    tipo_necesidad = random.choice(list(recursos_ofrecidos.keys()))
+    necesidad_especifica = random.choice(recursos_ofrecidos[tipo_necesidad])
     datos = {
         "id": str(uuid.uuid4()),
         "Nombre": generador_nombres(),
         "Contacto": generador_telefonos(),
-        "Tipo de necesidad": random.choice(recursos_ofrecidos),
-        "Necesidad específica": random.choice(["Agua", "Comida enlatada", "Mantas", "Kit de higiene"]),
+        "Tipo de necesidad": tipo_necesidad,
+        "Necesidad específica": necesidad_especifica,
         "Nivel de urgencia": random.randint(1, 5),
         "Ubicación": {
             "pueblo": pueblo,

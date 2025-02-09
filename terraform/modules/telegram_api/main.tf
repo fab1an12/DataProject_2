@@ -1,13 +1,13 @@
 resource "google_artifact_registry_repository" "telegram-api" {
   project  = var.project_id
   location = var.region
-  repository_id = var.repository_name
+  repository_id = var.repository_name_telegram
   description   = "Repositorio Docker API de Telegram"
   format        = "DOCKER"
 }
 
 locals {
-  image_name = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repository_name}/myimage:latest"
+  image_name = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repository_name_telegram}/myimage:latest"
 }
 
 resource "null_resource" "build_push_image" {
@@ -31,7 +31,7 @@ resource "google_cloud_run_service_iam_member" "invoker" {
 }
 
 resource "google_cloud_run_v2_service" "telegram_api" {
-  name     = var.job_name
+  name     = var.job_name_telegram
   location = var.region
   deletion_protection = false
   project  = var.project_id

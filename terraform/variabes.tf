@@ -3,27 +3,49 @@ variable "project_id" {
   type        = string
 }
 
-variable "telegram_bot_token" {
-  description = "Token del bot de Telegram"
-  type        = string
-  sensitive   = true
-}
+# variable "telegram_bot_token" {
+#   description = "Token del bot de Telegram"
+#   type        = string
+#   sensitive   = true
+# }
 
 variable "region" {
   description = "Región de despliegue de los recursos en Google Cloud"
   type        = string
 }
 
-variable "repository_name" {
+variable "repository_name_telegram" {
   description = "Nombre del repositorio de Artifact Registry"
   type        = string
   default = "telegram-api"
 }
-
-variable "job_name" {
+variable "repository_name_ayudantes" {
+  description = "Nombre del repositorio de Artifact Registry"
+  type        = string
+  default = "help-generator"
+}
+variable "job_name_telegram" {
   description = "Nombre del job de Cloud Build"
   type        = string
   default     = "telegram-api"
+  
+}
+variable "job_name_ayudantes" {
+  description = "Nombre del job de Cloud Build"
+  type        = string
+  default     = "help-generator"
+  
+}
+variable "topic_name_help" {
+  description = "Nombre del topic de ayudantes"
+  type = string
+  default = "helpers_topic"
+}
+
+variable "subscription_name_help" {
+  description = "Nombre de la suscripción al topic de ayudantes"
+  type = string
+  default = "helpers_subscription"
   
 }
 

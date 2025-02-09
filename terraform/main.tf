@@ -1,11 +1,11 @@
-module "telegram_api" {
-  source             = "./modules/telegram_api"
-  project_id         = var.project_id
-  telegram_bot_token = var.telegram_bot_token
-  region             = var.region
-  repository_name    = var.repository_name
-  job_name           = var.job_name
-  }
+# module "telegram_api" {
+#   source             = "./modules/telegram_api"
+#   project_id         = var.project_id
+#   telegram_bot_token = var.telegram_bot_token
+#   region             = var.region
+#   repository_name_telegram   = var.repository_name_telegram
+#   job_name_telegram  = var.job_name_telegram
+#   }
 
 # module "ia-agent" {
 #   source             = "./modules/ia-agent"
@@ -17,3 +17,20 @@ module "telegram_api" {
 #   langchain_api_key  = var.langchain_api_key
 #   langchain_tracing = var.langchain_tracing
 # }
+
+module "generador_ayudantes" {
+  source             = "./modules/generador_ayudantes"
+  project_id         = var.project_id
+  region             = var.region
+  repository_name_ayudantes = var.repository_name_ayudantes
+  job_name_ayudantes = var.job_name_ayudantes
+  topic_name_help = var.topic_name_help
+  depends_on = [module.pubsub]
+}
+
+module "pubsub" {
+  source             = "./modules/pubsub"
+  project_id         = var.project_id
+  topic_name_help = var.topic_name_help
+  subscription_name_help = var.subscription_name_help
+}
