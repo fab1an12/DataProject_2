@@ -9,19 +9,38 @@ variable "telegram_bot_token" {
   sensitive   = true
 }
 
-variable "environment" {
-  description = "Entorno de ejecución"
-  type        = string
-}
-
 variable "region" {
   description = "Región de despliegue de los recursos en Google Cloud"
   type        = string
-  default     = "europe-southwest1"
 }
 
-variable "cloud_function_runtime" {
-  description = "Runtime de la función de Cloud Functions"
+variable "repository_name" {
+  description = "Nombre del repositorio de Artifact Registry"
   type        = string
-  default     = "python310"
+  default = "telegram-api"
 }
+
+variable "job_name" {
+  description = "Nombre del job de Cloud Build"
+  type        = string
+  default     = "telegram-api"
+  
+}
+
+# variable "openai_api_key" {
+#     description = "API Key para OpenAI"
+#     type        = string
+#     sensitive   = true
+# }
+
+# variable "langchain_tracing" {
+#     description = "Habilitar trazado para LangChain"
+#     type        = string
+#     default     = "true"
+# }
+
+# variable "langchain_api_key" {
+#     description = "API Key para LangChain"
+#     type        = string
+#     sensitive   = true
+# }

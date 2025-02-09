@@ -17,10 +17,6 @@ from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from memory import get_conversation_memory
 from tools import PubSubTool
 
-os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY")
-os.environ["LANGCHAIN_TRACING"] = "true"
-os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY")
-
 app = FastAPI()
 
 prompt = hub.pull("hwchase17/structured-chat-agent")
@@ -53,7 +49,6 @@ def build_agent(session_id: str):
         "- Recopilas variables y al final usas 'pubsub_tool'.\n"
         "..."
     )
-    # Añadimos ese mensaje a la memoria (SystemMessage) si es la 1ª vez
     if len(memory.chat_memory.messages) == 0:
         memory.chat_memory.add_message(SystemMessage(content=initial_message))
 
@@ -95,7 +90,7 @@ async def run_agent_endpoint(req: Request):
     memory.chat_memory.add_message(AIMessage(content=agent_reply))
 
     # Enviar la respuesta del agente a la función puente, para que llegue a Telegram
-    bridge_endpoint = f"https://europe-southwest1-{os.environ.get('ENVIRONMENT')}.cloudfunctions.net/send_message"
+    bridge_endpoint = f"https://europe-southwest1-{os.environ.get('ENVIRONMENT')}.cloudfunctions.net/api-telegram/send_message"
     payload = {
             "chat_id": chat_id,
             "text": agent_reply

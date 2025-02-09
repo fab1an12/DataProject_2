@@ -1,57 +1,55 @@
-resource "google_storage_bucket" "telegram_api_bucket" {
-  name          = "${var.project_id}-telegram-api"
-  location      = var.region
-  force_destroy = true
+resource "google_artifact_registry_repository" "telegram-api" {
+  project  = var.project_id
+  location = var.region
+  repository_id = var.repository_name
+  description   = "Repositorio Docker API de Telegram"
+  format        = "DOCKER"
 }
 
-resource "google_storage_bucket_object" "telegram_api_bucket_object" {
-  name   = "telegram-api"
-  bucket = google_storage_bucket.telegram_api_bucket.name
-  source = "${path.module}/telegram_api.zip"
+locals {
+  image_name = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repository_name}/myimage:latest"
 }
 
-resource "google_cloudfunctions2_function" "telegram_api" {
-  name        = "telegram-api"
-  location    = var.region
-  project = var.project_id
-  description = "API para leer y escribir en Telegram"
+resource "null_resource" "build_push_image" {
+  depends_on = [
+    google_artifact_registry_repository.telegram-api
+  ]
 
-  build_config {
-    runtime     = var.cloud_function_runtime
-    entry_point = "app"
-    source {
-      storage_source {
-        bucket = google_storage_bucket.telegram_api_bucket.name
-        object = google_storage_bucket_object.telegram_api_bucket_object.name
+  provisioner "local-exec" {
+      command = <<EOT
+      gcloud builds submit --region=${var.region} --project=${var.project_id} --tag=${local.image_name} ./modules/telegram_api
+  EOT
+    }
+}
+
+resource "google_cloud_run_service_iam_member" "invoker" {
+  location = var.region
+  project  = var.project_id
+  service  = google_cloud_run_v2_service.telegram_api.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"  
+}
+
+resource "google_cloud_run_v2_service" "telegram_api" {
+  name     = var.job_name
+  location = var.region
+  deletion_protection = false
+  project  = var.project_id
+  template {
+    containers {
+      image = local.image_name
+
+      env {
+        name  = "TELEGRAM_BOT_TOKEN"
+        value = var.telegram_bot_token
       }
     }
   }
-
-  service_config {
-    min_instance_count = 0
-    max_instance_count = 5
-    available_memory = "256M"
-    timeout_seconds = 60
-    environment_variables = {
-      TELEGRAM_BOT_TOKEN = var.telegram_bot_token
-      ENVIRONMENT    = var.environment
-    }
+  traffic {
+    type = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
   }
-}
-
-resource "google_cloudfunctions2_function_iam_member" "allow_all" {
-  cloud_function = google_cloudfunctions2_function.telegram_api.name
-  role           = "roles/cloudfunctions.invoker"
-  member         = "allUsers"
-}
-
-resource "null_resource" "set_telegram_webhook" {
-  provisioner "local-exec" {
-    command = <<EOT
-      curl -X POST "https://api.telegram.org/bot${var.telegram_bot_token}/setWebhook" \
-        -H "Content-Type: application/json" \
-        -d '{"url": "https://${google_cloudfunctions2_function.telegram_api.url}/webhook"}'
-    EOT
-  }
-  depends_on = [google_cloudfunctions2_function.telegram_api]
+  depends_on = [
+    null_resource.build_push_image
+  ]
 }
