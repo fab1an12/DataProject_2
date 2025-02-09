@@ -15,13 +15,13 @@ variable "region" {
 }
 
 
-variable "repository_name" {
+variable "repository_name_telegram" {
   description = "Nombre del repositorio de Artifact Registry"
   type        = string
   default = "telegram-api"
 }
 
-variable "job_name" {
+variable "job_name_telegram" {
   description = "Nombre del job de Cloud Build"
   type        = string
   default     = "telegram-api"
