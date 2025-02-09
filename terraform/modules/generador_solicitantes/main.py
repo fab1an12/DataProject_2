@@ -3,52 +3,26 @@ import random
 import json
 import logging
 import uuid
+import time
 from datetime import datetime
 from google.cloud import pubsub_v1
 from faker import Faker
-from shapely.geometry import Point, shape
-from pyproj import Transformer
+from geopy.geocoders import Nominatim
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-with open('config.json', 'r') as f:
-    config = json.load(f)
-
-project_id = config["project_id"]
-topic_name = config["topic_name"]
+PROJECT_ID = os.getenv("PROJECT_ID")
+TOPIC_NAME = os.getenv("TOPIC_NAME_SOLICITANTES")
 
 publisher = pubsub_v1.PublisherClient()
-topic_path = publisher.topic_path(project_id, topic_name)
+topic_path = publisher.topic_path(PROJECT_ID, TOPIC_NAME)
 
-# Nombres
-fake = Faker("es_ES")
 def generador_nombres():
+    fake = Faker("es_ES")
     return fake.name()
 
-# Contacto
 def generador_telefonos():
     return f"6{random.randint(10000000, 99999999)}"
-
-# Necesidades 
-necesidades = ["Refugio", "Suministros", "Atención médica", "Equipos de limpieza", "Asistencia psicológica"]
-numero_min = 1
-numero_max = 10
-suministros = ["Agua", "Comida enlatada", "Mantas", "Kit de higiene"]
-medico = ["Herida leve", "Fractura", "Deshidratación"]
-herramientas_limpieza = ["Pala", "Botas", "Cubo", "Mascarillas", "Manguera", "Escoba industrial"]
-especialistas_psicologicos = ["Psicólogo", "Voluntario capacitado", "Trabajador social"]
-
-# Ubicación
-with open('zonas_valencia.geojson', 'r', encoding='utf-8') as f:
-    datos_zonas = json.load(f)
-
-zonas = {}
-for municipio in datos_zonas["features"]:
-    nombre = municipio["properties"]["NOMBRE"]
-    poligono = shape(municipio["geometry"])
-    zonas[nombre] = poligono
-
-transformer = Transformer.from_crs("EPSG:4326", "EPSG:25830", always_xy=True)
 
 def generar_coordenadas_aleatorias():
     latitud = random.uniform(39.0, 40.1)
@@ -56,24 +30,35 @@ def generar_coordenadas_aleatorias():
     return latitud, longitud
 
 def identificar_pueblo(lat, lon):
-    lon_25830, lat_25830 = transformer.transform(lon, lat)
+    geolocator = Nominatim(user_agent="ayudante_geocoder")
+    try:
+        time.sleep(1)
+        location = geolocator.reverse((lat, lon), language="es")
+        if location and location.raw and "address" in location.raw:
+            address = location.raw["address"]
+            return address.get("city") or address.get("town") or address.get("village")
+    except Exception as e:
+        print("Error en reverse geocoding:", e)
+    return "Valencia"
 
-    punto = Point(lon_25830, lat_25830)
-    for pueblo, poligono in zonas.items():
-        if poligono.contains(punto):
-            return pueblo
-    return "Pueblo desconocido"
-
-# Datos solicitantes
 def generador_solicitantes():
     latitud, longitud = generar_coordenadas_aleatorias()
     pueblo = identificar_pueblo(latitud, longitud)
+    recursos_ofrecidos = {
+    "Refugio": ["1 persona", "2 personas", "3 personas", "4 personas", "5 personas"],
+    "Suministros": ["Agua", "Comida enlatada", "Kit de higiene"],
+    "Atención médica": ["Herida leve", "Fractura", "Deshidratación"],
+    "Equipos de limpieza": ["Pala", "Botas", "Cubo", "Mascarillas"],
+    "Rescate": ["Rescate en edificio", "Rescate en vehículo", "Rescate en garaje"]
+    }
+    tipo_necesidad = random.choice(list(recursos_ofrecidos.keys()))
+    necesidad_especifica = random.choice(recursos_ofrecidos[tipo_necesidad])
     datos = {
         "id": str(uuid.uuid4()),
         "Nombre": generador_nombres(),
         "Contacto": generador_telefonos(),
-        "Tipo de necesidad": random.choice(necesidades),
-        "Número de personas": random.randint(numero_min, numero_max),
+        "Tipo de ayuda": tipo_necesidad,
+        "Ayuda específica": necesidad_especifica,
         "Nivel de urgencia": random.randint(1, 5),
         "Ubicación": {
             "pueblo": pueblo,
@@ -83,30 +68,11 @@ def generador_solicitantes():
         "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
 
-    necesidad = datos["Tipo de necesidad"]
-    if necesidad == "Refugio":
-        datos["Número de personas afectadas"] = random.randint(numero_min, numero_max)
-
-    elif necesidad == "Suministros":
-        datos["Duración del suministro (días)"] = random.randint(1, 7)
-        datos["Tipo de suministro"] = random.choice(suministros)
-
-    elif necesidad == "Atención médica":
-        datos["Número de personas afectadas"] = random.randint(numero_min, numero_max)
-        datos["Tipo de atención"] = random.choice(medico)
-
-    elif necesidad == "Equipos de limpieza":
-        datos["Herramientas necesarias"] = random.choice(herramientas_limpieza)
-    elif necesidad == "Asistencia psicológica":
-
-        datos["Especialista requerido"] = random.choice(especialistas_psicologicos)
-
-
     datos_json = json.dumps(datos, ensure_ascii=False)
     future = publisher.publish(topic_path, data=datos_json.encode("utf-8"))
     message_id = future.result()
 
-    logging.info(f"Mensaje enviado a Pub/Sub con ID: {message_id}")
+    logging.info(f"Ayuda enviada a Pub/Sub con ID: {message_id}")
     logging.info(f"Datos enviados: {datos_json}")
 
 if __name__ == "__main__":

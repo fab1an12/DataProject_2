@@ -27,7 +27,15 @@ module "generador_ayudantes" {
   topic_name_help = var.topic_name_help
   depends_on = [module.pubsub]
 }
-
+module "generador_solicitantes" {
+  source             = "./modules/generador_solicitantes"
+  project_id         = var.project_id
+  region             = var.region
+  repository_name_solicitantes = var.repository_name_solicitantes
+  job_name_solicitantes =   var.job_name_solicitantes
+  topic_name_tohelp = var.topic_name_tohelp
+  depends_on = [module.pubsub]
+}
 module "pubsub" {
   source             = "./modules/pubsub"
   project_id         = var.project_id
