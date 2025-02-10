@@ -1,0 +1,4 @@
+apache-beam[google]  # Apache Beam con soporte para Google Cloud (Pub/Sub, BigQuery, etc.)
+google-cloud-bigquery  # Para interactuar con BigQuery
+google-cloud-pubsub  # Para interactuar con Google Pub/Sub
+geopy  # Para calcular distancias geográficas

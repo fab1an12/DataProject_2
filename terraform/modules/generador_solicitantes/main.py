@@ -11,8 +11,8 @@ from geopy.geocoders import Nominatim
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-PROJECT_ID = os.getenv("PROJECT_ID")
-TOPIC_NAME = os.getenv("TOPIC_NAME_SOLICITANTES")
+PROJECT_ID = "alpine-alpha-447114-n9"
+TOPIC_NAME = "TOPIC_NAME_SOLICITANTES"
 
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, TOPIC_NAME)
