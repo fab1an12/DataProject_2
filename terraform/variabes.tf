@@ -48,7 +48,29 @@ variable "subscription_name_help" {
   default = "helpers_subscription"
   
 }
+variable "repository_name_solicitantes" {
+  description = "Nombre del repositorio de Artifact Registry"
+  type        = string
+  default = "tohelp-generator"
+}
 
+variable "job_name_solicitantes" {
+  description = "Nombre del job de Cloud Build"
+  type        = string
+  default     = "tohelp-generator"
+  
+}
+variable "topic_name_tohelp" {
+  description = "Nombre del topic de solicitantes"
+  type = string
+  default = "tohelp_topic"
+}
+variable "subscription_name_tohelp" {
+  description = "Nombre de la suscripción al topic de solicitantes"
+  type = string
+  default = "tohelp_subscription"
+  
+}
 # variable "openai_api_key" {
 #     description = "API Key para OpenAI"
 #     type        = string

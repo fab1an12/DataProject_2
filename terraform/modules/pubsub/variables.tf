@@ -13,3 +13,15 @@ variable "project_id" {
   description = "ID del proyecto de Google Cloud"
   type        = string
 }
+
+variable "topic_name_tohelp" {
+  description = "Nombre del topic de solicitantes"
+  type = string
+  default = "tohelp_topic"
+}
+variable "subscription_name_tohelp" {
+  description = "Nombre de la suscripción al topic de solicitantes"
+  type = string
+  default = "tohelp_subscription"
+  
+}

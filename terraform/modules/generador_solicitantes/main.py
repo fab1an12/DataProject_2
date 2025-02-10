@@ -17,7 +17,6 @@ TOPIC_NAME = os.getenv("TOPIC_NAME_SOLICITANTES")
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, TOPIC_NAME)
 
-
 def generador_nombres():
     fake = Faker("es_ES")
     return fake.name()
@@ -45,21 +44,24 @@ def identificar_pueblo(lat, lon):
 def generador_solicitantes():
     latitud, longitud = generar_coordenadas_aleatorias()
     pueblo = identificar_pueblo(latitud, longitud)
-    recursos_demandados = {
+    
+    recursos_ofrecidos = {
     "Refugio": ["1 persona", "2 personas", "3 personas", "4 personas", "5 personas"],
     "Suministros": ["Agua", "Comida enlatada", "Kit de higiene"],
     "Atención médica": ["Herida leve", "Fractura", "Deshidratación"],
     "Equipos de limpieza": ["Pala", "Botas", "Cubo", "Mascarillas"],
     "Rescate": ["Rescate en edificio", "Rescate en vehículo", "Rescate en garaje"]
     }
-    tipo_necesidad = random.choice(list(recursos_demandados.keys()))
-    necesidad_especifica = random.choice(recursos_demandados[tipo_necesidad])
+    
+    tipo_necesidad = random.choice(list(recursos_ofrecidos.keys()))
+    necesidad_especifica = random.choice(recursos_ofrecidos[tipo_necesidad])
+
     datos = {
         "id": str(uuid.uuid4()),
         "Nombre": generador_nombres(),
         "Contacto": generador_telefonos(),
-        "Tipo de necesidad": tipo_necesidad,
-        "Necesidad específica": necesidad_especifica,
+        "Tipo de ayuda": tipo_necesidad,
+        "Ayuda específica": necesidad_especifica,
         "Nivel de urgencia": random.randint(1, 5),
         "Ubicación": {
             "pueblo": pueblo,
@@ -73,7 +75,7 @@ def generador_solicitantes():
     future = publisher.publish(topic_path, data=datos_json.encode("utf-8"))
     message_id = future.result()
 
-    logging.info(f"Mensaje enviado a Pub/Sub con ID: {message_id}")
+    logging.info(f"Ayuda enviada a Pub/Sub con ID: {message_id}")
     logging.info(f"Datos enviados: {datos_json}")
 
 if __name__ == "__main__":
