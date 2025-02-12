@@ -1,176 +1,201 @@
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 import apache_beam.transforms.window as window
+from apache_beam.io.gcp.bigquery import WriteToBigQuery
 import logging
 import json
 import argparse
+from datetime import datetime
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 
+# Esquema de BigQuery
+SUCCESSFUL_MATCHES_SCHEMA = """
+    match_id:STRING, 
+    affected_id:STRING, 
+    volunteer_id:STRING, 
+    necessity:STRING, 
+    specific_need:STRING, 
+    city:STRING, 
+    match_date:TIMESTAMP, 
+    status:STRING
+"""
+
+FAILED_MATCHES_SCHEMA = """
+    affected_id:STRING, 
+    necessity:STRING, 
+    specific_need:STRING, 
+    city:STRING, 
+    last_attempt_date:TIMESTAMP, 
+    retry_count:INTEGER, 
+    final_status:STRING, 
+    details:STRING
+"""
+
 def ParsePubSubMessages(message): 
+    """Parses JSON messages from Pub/Sub"""
     pubsub_message = message.decode('utf-8')
     msg = json.loads(pubsub_message)
 
-    logging.info(f"Mensaje recibido de Pub/Sub: {msg}")
+    # ✅ Normalización de los datos para evitar errores de comparación
+    normalized_msg = {
+        'id': msg.get('id'),
+        'name': msg.get('Nombre'),
+        'contact': msg.get('Contacto'),
+        'necessity': msg.get('Tipo de ayuda', msg.get('Tipo de necesidad', 'UNKNOWN')).strip().upper(),
+        'specific_need': msg.get('Ayuda específica', msg.get('Necesidad específica', 'UNKNOWN')).strip().upper(),
+        'urgency': msg.get('Nivel de urgencia', 0),
+        'city': msg.get('Ubicación', {}).get('pueblo', 'UNKNOWN').strip().upper(),
+        'location': {
+            'latitude': msg.get('Ubicación', {}).get('Latitud', 0.0),
+            'longitude': msg.get('Ubicación', {}).get('Longitud', 0.0)
+        },
+        'date': msg.get('Fecha', datetime.utcnow().isoformat()),  
+        'retry_count': msg.get('retry_count', 0)
+    }
+    
+    logging.info(f"Mensaje normalizado: {normalized_msg}")
+    return normalized_msg
 
-    return msg
+class ProduceMatchesWithRetry(beam.DoFn):
+    """Matches affected people with volunteers and handles retries"""
+    def process(self, element):
+        key, grouped = element
+        affected = list(grouped.get('affected', []))
+        volunteers = list(grouped.get('volunteer', []))
 
-def key_by_match_fields(record):
-    """
-    Returns a tuple: (
-        (city, necessity, disponibility),
-        record
-    )
-    Maneja casos donde faltan claves en el mensaje.
-    """
-    city = record.get("city", "UNKNOWN")  # Si no tiene "city", usa "UNKNOWN"
-    necessity = record.get("necessity", "UNKNOWN")
-    disponibility = record.get("disponibility", "UNKNOWN")
+        logging.info(f"🔍 Intentando emparejar clave {key} con {len(affected)} afectados y {len(volunteers)} voluntarios.")
+        
+        current_time = datetime.utcnow().isoformat()  
 
-    key = (city, necessity, disponibility)
-    logging.info(f"Generando clave: {key} para el record: {record}")
+        for afectado in affected:
+            matched = False
+            retry_count = afectado.get('retry_count', 0)
 
-    return key, record
+            for voluntario in volunteers:
+                logging.info(f"🔎 Comparando: Afectado {afectado['necessity']} - {afectado['specific_need']} "
+                             f"con Voluntario {voluntario['necessity']} - {voluntario['specific_need']}")
 
-def produce_matches(element):
-    """
-    Recibe algo como:
-        element = ( key, { 'affected': [...], 'volunteer': [...] } )
-    y produce:
-        - Todos los pares (afectado, voluntario) emparejados
-        - Todos los afectados sin voluntarios
-        - Todos los voluntarios sin afectados
-    """
-    key, grouped = element
-    afectados = grouped.get('affected', [])
-    voluntarios = grouped.get('volunteer', [])
+                if (afectado['necessity'] == voluntario['necessity'] and 
+                    afectado['specific_need'] == voluntario['specific_need']):
+                    
+                    matched = True
+                    successful_match = {
+                        'match_id': f"{afectado['id']}-{voluntario['id']}",
+                        'affected_id': afectado['id'],
+                        'volunteer_id': voluntario['id'],
+                        'necessity': afectado['necessity'],
+                        'specific_need': afectado['specific_need'],
+                        'city': afectado['city'],
+                        'match_date': current_time,
+                        'status': 'MATCHED'
+                    }
+                    logging.info(f"✅ Match encontrado: {successful_match}")
+                    yield beam.pvalue.TaggedOutput('successful_matches', successful_match)
+                    yield beam.pvalue.TaggedOutput('matched', successful_match)
+                    volunteers.remove(voluntario)
+                    break  
 
-    logging.info(f"Procesando clave {key} con {len(afectados)} afectados y {len(voluntarios)} voluntarios.")
-
-    for afectado in afectados:
-        found_any = False
-        for voluntario in voluntarios:
-            found_any = True
-            yield beam.pvalue.TaggedOutput(
-                'matched',
-                {'afectado': afectado, 'voluntario': voluntario}
-            )
-        if not found_any:
-            yield beam.pvalue.TaggedOutput('non_matched_affected', afectado)
-
-    if not afectados:
-        for voluntario in voluntarios:
-            yield beam.pvalue.TaggedOutput('non_matched_volunteer', voluntario)
+            if not matched:
+                retry_count += 1
+                afectado['retry_count'] = retry_count
+                
+                failed_match = {
+                    'affected_id': afectado['id'],
+                    'necessity': afectado['necessity'],
+                    'specific_need': afectado['specific_need'],
+                    'city': afectado['city'],
+                    'last_attempt_date': current_time,
+                    'retry_count': retry_count,
+                    'final_status': 'PENDING_RETRY' if retry_count < 3 else 'FAILED_AFTER_RETRIES',
+                    'details': f"No se encontró voluntario después de {retry_count} intentos"
+                }
+                logging.info(f"❌ No-match registrado: {failed_match}")
+                yield beam.pvalue.TaggedOutput('failed_matches', failed_match)
 
 def run():
-    logging.info("Iniciando el pipeline de Dataflow...")
-
-    parser = argparse.ArgumentParser(description='Input arguments for the Dataflow Streaming Pipeline.')
-    
-    parser.add_argument('--project_id', required=True, help='GCP cloud project name')
-    parser.add_argument('--affected_sub', required=True, help='PubSub subscription for affected')
-    parser.add_argument('--volunteer_sub', required=True, help='PubSub subscription for volunteers')
-    parser.add_argument('--output_topic_non_matched', required=True, help='Output Pub/Sub topic for non-matched')
-    parser.add_argument('--output_topic_matched', required=True, help='Output Pub/Sub topic for matched')
-    parser.add_argument('--runner', default='DirectRunner', help='Runner for execution')
-    parser.add_argument('--region', default='europe-west1', help='GCP region')
-    parser.add_argument('--temp_location', required=True, help='GCS temp location')
-    parser.add_argument('--staging_location', required=True, help='GCS staging location')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--project_id', required=True)
+    parser.add_argument('--affected_sub', required=True)
+    parser.add_argument('--volunteer_sub', required=True)
+    parser.add_argument('--output_topic_matched', required=True)
+    parser.add_argument('--bigquery_dataset', required=True)
+    parser.add_argument('--temp_location', required=True)
+    parser.add_argument('--staging_location', required=True)
 
     args, pipeline_opts = parser.parse_known_args()
-
-    logging.info(f"Proyecto: {args.project_id}")
-    logging.info(f"Affected Subscription: {args.affected_sub}")
-    logging.info(f"Volunteer Subscription: {args.volunteer_sub}")
-    logging.info(f"Output Topic (non-matched): {args.output_topic_non_matched}")
-    logging.info(f"Output Topic (matched): {args.output_topic_matched}")
-    logging.info(f"Runner: {args.runner}")
-    logging.info(f"Región: {args.region}")
 
     options = PipelineOptions(
         pipeline_opts,
         save_main_session=True,
-        runner="DataflowRunner",  # Corrección: usar string
         streaming=True,
         project=args.project_id,
-        region=args.region,
         temp_location=args.temp_location,
-        staging_location=args.staging_location,
-        experiments=["use_runner_v2"]  # Mejora para compatibilidad
+        staging_location=args.staging_location
     )
 
     with beam.Pipeline(options=options) as p:
-        logging.info("Creando el pipeline...")
+        window_size = 90
 
         affected_data = (
             p
-            | "Read affected data from Pub/Sub" >> beam.io.ReadFromPubSub(subscription=args.affected_sub)
-            | "Parse Affected" >> beam.Map(ParsePubSubMessages)
-            | "Window Affected" >> beam.WindowInto(beam.window.FixedWindows(90))
-            | "Key Affected" >> beam.Map(key_by_match_fields)
+            | "Read affected" >> beam.io.ReadFromPubSub(subscription=args.affected_sub)
+            | "Parse affected" >> beam.Map(ParsePubSubMessages)
+            | "Window affected" >> beam.WindowInto(window.FixedWindows(window_size))  
+            | "Key affected" >> beam.Map(lambda x: (
+                (x['necessity'], x['specific_need'], x['city']), x))
         )
 
         volunteer_data = (
             p
-            | "Read volunteer data from Pub/Sub" >> beam.io.ReadFromPubSub(subscription=args.volunteer_sub)
-            | "Parse Volunteer" >> beam.Map(ParsePubSubMessages)
-            | "Window Volunteer" >> beam.WindowInto(beam.window.FixedWindows(90))
-            | "Key Volunteer" >> beam.Map(key_by_match_fields)
-        )
-
-        logging.info("Unificando datos de afectados y voluntarios...")
-
-        grouped = (
-            {'affected': affected_data, 'volunteer': volunteer_data}
-            | "CoGroupByKey" >> beam.CoGroupByKey()
+            | "Read volunteer" >> beam.io.ReadFromPubSub(subscription=args.volunteer_sub)
+            | "Parse volunteer" >> beam.Map(ParsePubSubMessages)
+            | "Window volunteer" >> beam.WindowInto(window.FixedWindows(window_size))  
+            | "Key volunteer" >> beam.Map(lambda x: (
+                (x['necessity'], x['specific_need'], x['city']), x))
         )
 
         results = (
-            grouped
-            | "Match DoFn" >> beam.ParDo(produce_matches)
-              .with_outputs('matched', 'non_matched_affected', 'non_matched_volunteer')
+            {'affected': affected_data, 'volunteer': volunteer_data}
+            | "CoGroupByKey" >> beam.CoGroupByKey()
+            | "Match" >> beam.ParDo(ProduceMatchesWithRetry())
+                .with_outputs('matched', 'successful_matches', 'failed_matches')
         )
 
-        matched_pcoll = results['matched']
-        unmatched_affected_pcoll = results['non_matched_affected']
-        unmatched_volunteer_pcoll = results['non_matched_volunteer']
+        (results.successful_matches | "Write Successful Matches" >> WriteToBigQuery(
+            f"{args.project_id}:{args.bigquery_dataset}.successful_matches",
+            schema=SUCCESSFUL_MATCHES_SCHEMA,
+            create_disposition="CREATE_IF_NEEDED",
+            write_disposition="WRITE_APPEND"
+        ))
 
-        logging.info("Escribiendo los datos procesados en Pub/Sub...")
-
-        (matched_pcoll
-         | 'Convert matched to JSON' >> beam.Map(lambda x: json.dumps(x).encode("utf-8"))
-         | 'Write matched data' >> beam.io.WriteToPubSub(topic=args.output_topic_matched)
-        )
-
-        (unmatched_affected_pcoll
-         | 'Convert non-matched affected to JSON' >> beam.Map(lambda x: json.dumps(x).encode("utf-8"))
-         | 'Write non-matched affected'>> beam.io.WriteToPubSub(topic=args.output_topic_non_matched)
-        )
-
-        (unmatched_volunteer_pcoll
-         | 'Convert non-matched volunteers to JSON' >> beam.Map(lambda x: json.dumps(x).encode("utf-8"))
-         | 'Write non-matched volunteers'>> beam.io.WriteToPubSub(topic=args.output_topic_non_matched)
-        )
-
-        logging.info("Pipeline finalizado exitosamente.")
+        (results.failed_matches | "Write Failed Matches" >> WriteToBigQuery(
+            f"{args.project_id}:{args.bigquery_dataset}.failed_matches",
+            schema=FAILED_MATCHES_SCHEMA,
+            create_disposition="CREATE_IF_NEEDED",
+            write_disposition="WRITE_APPEND"
+        ))
 
 if __name__ == '__main__':
-    logging.info("Ejecutando el script...")
+    logging.info("🚀 Iniciando pipeline...")
     run()
 
 
 
 '''(.venv) raulalgora@MacBook-Pro-de-Raul-2 dataflow % python3 dataflow.py \
     --project_id xxxx \
-    --affected_sub projects/xxxx/subscriptions/affected-sub \
-    --volunteer_sub projects/xxxx/subscriptions/volunteer-sub \
-    --output_topic_non_matched projects/xxxx/topics/no-matched \
-    --output_topic_matched projects/xxxx/topics/matched \
+    --affected_sub projects/alpine-alpha-447114-n9/subscriptions/affected-sub \
+    --volunteer_sub projects/alpine-alpha-447114-n9/subscriptions/volunteer-sub \
+    --output_topic_matched projects/alpine-alpha-447114-n9/topics/matched \
     --runner DataflowRunner \
     --region europe-west1 \
-    --zone europe-west1-b \
+    --worker_zone europe-west1-b \
     --temp_location gs://dataflow_raulalgora_west1/tmp \
     --staging_location gs://dataflow_raulalgora_west1/stg \
-    --service_account_email xxx-compute@developer.gserviceaccount.com
-'''
+    --service_account_email xxxxx@developer.gserviceaccount.com \
+    --bigquery_dataset dataflow
+
+
+
+''' 
