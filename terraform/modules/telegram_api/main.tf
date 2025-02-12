@@ -43,6 +43,10 @@ resource "google_cloud_run_v2_service" "telegram_api" {
         name  = "TELEGRAM_BOT_TOKEN"
         value = var.telegram_bot_token
       }
+      env {
+      name  = "AGENT_URL"
+        value = ""
+      }
     }
   }
   traffic {

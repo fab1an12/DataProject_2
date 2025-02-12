@@ -14,7 +14,6 @@ variable "region" {
   type        = string
 }
 
-
 variable "repository_name_telegram" {
   description = "Nombre del repositorio de Artifact Registry"
   type        = string

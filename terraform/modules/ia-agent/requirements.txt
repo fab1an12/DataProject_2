@@ -1,5 +1,6 @@
-fastapi
-uvicorn
+Flask==2.2.2
+Werkzeug==2.2.2
+gunicorn
 python-dotenv
 langchain
 langchain-openai
@@ -8,3 +9,5 @@ pydantic
 google-cloud-pubsub
 google-cloud-firestore
 requests
+langchain_community
+Flask[async]==2.2.2

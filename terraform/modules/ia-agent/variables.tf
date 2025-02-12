@@ -3,21 +3,11 @@ variable "project_id" {
   type        = string
 }
 
-variable "environment" {
-  description = "Entorno de ejecución"
-  type        = string
-}
-
 variable "region" {
   description = "Región de despliegue de los recursos en Google Cloud"
   type        = string
 }
 
-variable "cloud_function_runtime" {
-  description = "Runtime de la función de Cloud Functions"
-  type        = string
-  default     = "python310"
-}
 variable "openai_api_key" {
     description = "API Key para OpenAI"
     type        = string
@@ -36,3 +26,14 @@ variable "langchain_api_key" {
     sensitive   = true
 }
 
+variable "repository_name_agente" {
+  description = "Nombre del repositorio de Artifact Registry"
+  type        = string
+  default = "agent-api"
+}
+
+variable "job_name_agent" {
+  description = "Nombre del trabajo de Cloud Run"
+  type        = string
+  default     = "agent-api"
+}
