@@ -1,32 +1,26 @@
 import os
-import json
 import requests
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-
+import logging
+from flask import Flask, request, jsonify
 from google.cloud import firestore
-from google.cloud import pubsub_v1
-
-from langchain.callbacks import tracing
 from langchain import hub
 from langchain.agents import create_structured_chat_agent, AgentExecutor
-from langchain.llms import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
-
-from memory import get_conversation_memory
 from tools import PubSubTool
 
-app = FastAPI()
+TELEGRAM_URL = os.environ.get("TELEGRAM_URL")
+
+app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
 prompt = hub.pull("hwchase17/structured-chat-agent")
 
-def build_agent(session_id: str):
+def build_agent(memory: ConversationBufferMemory) -> AgentExecutor:
     llm = ChatOpenAI(model="gpt-4", temperature=0)
     tool_pubsub = PubSubTool()
     tools = [tool_pubsub]
-
-    memory = get_conversation_memory(session_id=session_id)
 
     agent = create_structured_chat_agent(
         llm=llm,
@@ -41,76 +35,76 @@ def build_agent(session_id: str):
         memory=memory,
         handle_parsing_errors=True
     )
-
-    initial_message = (
-        "Eres un asistente que sigue estas directrices:\n"
-        "- Respetas el prompt.\n"
-        "- Usas las herramientas sólo cuando sea necesario.\n"
-        "- Recopilas variables y al final usas 'pubsub_tool'.\n"
-        "..."
-    )
     if len(memory.chat_memory.messages) == 0:
+        initial_message = (
+            "Eres un asistente que sigue estas directrices:\n"
+            "- Respetas el prompt.\n"
+            "- Usas las herramientas solo cuando sea necesario.\n"
+            "- Recopilas variables y, al final, usas 'pubsub_tool'.\n"
+            "..."
+        )
         memory.chat_memory.add_message(SystemMessage(content=initial_message))
-
     return agent_executor
 
-@app.post("/run_agent")
-async def run_agent_endpoint(req: Request):
-    """
-    Endpoint que recibe un JSON como:
-    {
-      "chat_id": "...",
-      "message": "Mensaje del usuario"
-    }
-    y devuelve la respuesta del agente.
+@app.route("/run_agent", methods=["POST"])
+def run_agent_endpoint():
+    body = request.get_json(silent=True) or {}
+    logging.info(f"Data received: {body}")
+    chat_id = body.get("chat_id")
+    user_message = body.get("text", "")
+    if not chat_id:
+        return jsonify({"error": "chat_id is required"}), 400
 
-    Luego reenvía esa respuesta al endpoint /send_message
-    de la función puente para que llegue a Telegram.
-    """
-    data = await req.json()
-    chat_id = data.get("chat_id")
-    user_message = data.get("message", "")
+    db = firestore.Client()
+    doc_ref = db.collection("chat_sessions").document(str(chat_id))
+    doc = doc_ref.get()
+    messages = []
+    if doc.exists:
+        data = doc.to_dict()
+        messages = data.get("messages", [])
+        logging.info(f"Loaded {len(messages)} messages for session {chat_id} from Firestore")
+    else:
+        logging.info(f"No previous session for {chat_id}. Starting fresh.")
 
-    if not chat_id or not user_message:
-        return JSONResponse({"error": "Faltan campos chat_id o message"}, status_code=400)
+    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    for msg in messages:
+        if msg.get("type") == "human":
+            memory.chat_memory.add_message(HumanMessage(content=msg.get("content")))
+        elif msg.get("type") == "ai":
+            memory.chat_memory.add_message(AIMessage(content=msg.get("content")))
 
-    # Construir/obtener agente
-    agent_executor = build_agent(session_id=str(chat_id))
+    agent_executor = build_agent(memory)
+    response = agent_executor.invoke({"input": user_message})
+    agent_reply = response.get("output", "")
 
-    # Añadir el mensaje del usuario a la memoria
-    memory = agent_executor.memory
-    memory.chat_memory.add_message(HumanMessage(content=user_message))
+    serialized = []
+    for m in memory.chat_memory.messages:
+        if isinstance(m, HumanMessage):
+            serialized.append({"type": "human", "content": m.content})
+        elif isinstance(m, AIMessage):
+            serialized.append({"type": "ai", "content": m.content})
+    doc_ref.set({"messages": serialized})
+    logging.info(f"Saved {len(serialized)} messages for session {chat_id} to Firestore")
 
-    # Ejecutar dentro de un bloque de tracing (para LangSmith)
-    with tracing("gcf-agent-invocation"):
-        response = agent_executor.invoke({"input": user_message})
-
-    # Agregar respuesta del agente a la memoria
-    agent_reply = response["output"]
-    memory.chat_memory.add_message(AIMessage(content=agent_reply))
-
-    # Enviar la respuesta del agente a la función puente, para que llegue a Telegram
-    bridge_endpoint = f"https://europe-southwest1-{os.environ.get('ENVIRONMENT')}.cloudfunctions.net/api-telegram/send_message"
+    bridge_endpoint = TELEGRAM_URL.rstrip("/") + "/send_message"
     payload = {
-            "chat_id": chat_id,
-            "text": agent_reply
+        "chat_id": chat_id,
+        "text": agent_reply
     }
     try:
-        resp = requests.post(bridge_endpoint, json=payload)
-        resp.raise_for_status()
+        requests.post(bridge_endpoint, json=payload)
     except Exception as e:
-        return JSONResponse(
-            content={
-                "error": f"Error enviando el mensaje al bridge: {str(e)}", 
-                "agent_reply": agent_reply
-            },
-            status_code=500
-        )
+        logging.error(f"Error sending message to bridge: {e}")
+        return jsonify({
+            "error": f"Error sending message to bridge: {str(e)}",
+            "agent_reply": agent_reply
+        }), 500
 
-    # Opcionalmente, devolvemos la respuesta del agente
-    return {"reply": agent_reply}
+    return jsonify({"reply": agent_reply})
 
-# (Opcional) root, para prueba rápida
-@app.get("/")
+@app.route("/", methods=["GET"])
 def root():
-    return {"message": "LangChain Agent (React) en Cloud Function con FastAPI"}
+    return jsonify({"message": "LangChain Agent (React) en Cloud Run con Flask - Memory inline"})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080, debug=True)

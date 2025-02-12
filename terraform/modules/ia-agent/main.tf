@@ -1,54 +1,68 @@
-resource "google_storage_bucket" "agent_api_bucket" {
-  name          = "${var.project_id}-agent-api"
-  project = var.project_id
-  location      = var.region
-  force_destroy = true
-}
-
-resource "google_storage_bucket_object" "agent_api_bucket_object" {
-  name   = "agent-api"
-  bucket = google_storage_bucket.agent_api_bucket.name
-  source = "${path.module}/agent.zip"
-}
-
-resource "google_cloudfunctions2_function" "agent_api" {
-  name     = "agent-api"
+resource "google_artifact_registry_repository" "agent-api" {
   project  = var.project_id
   location = var.region
-  description = "API para el agente de IA"
+  repository_id = var.repository_name_agente
+  description   = "Repositorio Docker API de Agente"
+  format        = "DOCKER"
+}
 
-  build_config {
-    runtime     = var.cloud_function_runtime
-    entry_point = "app"
+locals {
+  image_name = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repository_name_agente}/myimage:latest"
+}
 
-    source {
-      storage_source {
-        bucket = google_storage_bucket.agent_api_bucket.name
-        object = google_storage_bucket_object.agent_api_bucket_object.name
+resource "null_resource" "build_push_image" {
+  depends_on = [
+    google_artifact_registry_repository.agent-api
+  ]
+
+  provisioner "local-exec" {
+      command = <<EOT
+      gcloud builds submit --region=${var.region} --project=${var.project_id} --tag=${local.image_name} ./modules/ia-agent
+  EOT
+    }
+}
+
+resource "google_cloud_run_service_iam_member" "invoker" {
+  location = var.region
+  project  = var.project_id
+  service  = google_cloud_run_v2_service.agent-api.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"  
+}
+
+resource "google_cloud_run_v2_service" "agent-api" {
+  name     = var.job_name_agent
+  location = var.region
+  deletion_protection = false
+  project  = var.project_id
+  template {
+    containers {
+      image = local.image_name
+
+      env {
+        name  = "OPENAI_API_KEY"
+        value = var.openai_api_key
+      }
+      env {
+        name  = "LANGCHAIN_TRACING"
+        value = var.langchain_tracing
+      }
+      env {
+        name  = "LANGCHAIN_API_KEY"
+        value = var.langchain_api_key
+      }
+      env {
+        name  = "TELEGRAM_URL"
+        value = ""
       }
     }
   }
-
-  service_config {
-    environment_variables = {
-      OPENAI_API_KEY     = var.openai_api_key
-      LANGCHAIN_API_KEY  = var.langchain_api_key
-      LANGCHAIN_TRACING  = var.langchain_tracing
-      ENVIRONMENT    = var.environment
-    }
-    min_instance_count = 0
-    max_instance_count = 5
-    available_memory = "256M"
-    timeout_seconds = 60
+  traffic {
+    type = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
   }
-
   depends_on = [
-    google_storage_bucket_object.agent_api_bucket_object
+    null_resource.build_push_image
   ]
 }
 
-resource "google_cloudfunctions2_function_iam_member" "allow_all" {
-  cloud_function = google_cloudfunctions2_function.agent_api.name
-  role           = "roles/cloudfunctions.invoker"
-  member         = "allUsers"
-}
