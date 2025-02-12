@@ -44,20 +44,30 @@ def identificar_pueblo(lat, lon):
 def generador_solicitantes():
     latitud, longitud = generar_coordenadas_aleatorias()
     pueblo = identificar_pueblo(latitud, longitud)
-    
     recursos_ofrecidos = {
-    "Refugio": ["1 persona", "2 personas", "3 personas", "4 personas", "5 personas"],
-    "Suministros": ["Agua", "Comida enlatada", "Kit de higiene"],
-    "Atención médica": ["Herida leve", "Fractura", "Deshidratación"],
-    "Equipos de limpieza": ["Pala", "Botas", "Cubo", "Mascarillas"],
-    "Rescate": ["Rescate en edificio", "Rescate en vehículo", "Rescate en garaje"]
+        "Agua": {
+            "items": ["Botella de agua", "Garrafa 20 litros", "Bidón 5 litros"],
+            "peso": 50
+        },
+        "Alimentos": {
+            "items": ["Comida enlatada", "Alimentos no perecederos", "Comida preparada"],
+            "peso": 30
+        },
+        "Medicamentos": {
+            "items": ["Analgésicos", "Antibióticos", "Medicamentos para la gripe"],
+            "peso": 15
+        },
+        "Otros": {
+            "items": ["Ropa", "Linternas", "Pilas", "Herramientas"],
+            "peso": 5
+        }
     }
-    
-    tipo_necesidad = random.choice(list(recursos_ofrecidos.keys()))
-    necesidad_especifica = random.choice(recursos_ofrecidos[tipo_necesidad])
-
+    tipos = list(recursos_ofrecidos.keys())
+    pesos = [recursos_ofrecidos[tipo]["peso"] for tipo in tipos]
+    tipo_necesidad = random.choices(tipos, weights=pesos, k=1)[0]
+    necesidad_especifica = random.choice(recursos_ofrecidos[tipo_necesidad]["items"])
     datos = {
-        "id": str(uuid.uuid4()),
+        "id": "A-" + str(uuid.uuid4()),
         "Nombre": generador_nombres(),
         "Contacto": generador_telefonos(),
         "Tipo de ayuda": tipo_necesidad,
@@ -68,7 +78,9 @@ def generador_solicitantes():
             "Latitud": latitud,
             "Longitud": longitud
         },
-        "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),        
+        "Nº intentos": 0
+
     }
 
     datos_json = json.dumps(datos, ensure_ascii=False)
