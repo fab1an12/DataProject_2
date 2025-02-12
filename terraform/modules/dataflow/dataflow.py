@@ -162,11 +162,11 @@ if __name__ == '__main__':
 
 
 '''(.venv) raulalgora@MacBook-Pro-de-Raul-2 dataflow % python3 dataflow.py \
-    --project_id alpine-alpha-447114-n9 \
-    --affected_sub projects/alpine-alpha-447114-n9/subscriptions/affected-sub \
-    --volunteer_sub projects/alpine-alpha-447114-n9/subscriptions/volunteer-sub \
-    --output_topic_non_matched projects/alpine-alpha-447114-n9/topics/no-matched \
-    --output_topic_matched projects/alpine-alpha-447114-n9/topics/matched \
+    --project_id xxxx \
+    --affected_sub projects/xxxx/subscriptions/affected-sub \
+    --volunteer_sub projects/xxxx/subscriptions/volunteer-sub \
+    --output_topic_non_matched projects/xxxx/topics/no-matched \
+    --output_topic_matched projects/xxxx/topics/matched \
     --runner DataflowRunner \
     --region europe-west1 \
     --zone europe-west1-b \
