@@ -53,11 +53,7 @@ resource "null_resource" "execute_job" {
     google_cloud_run_v2_job.tohelp-generator
   ]
 
-  provisioner "local-exec" {
-    command = <<EOT
-gcloud run jobs execute ${google_cloud_run_v2_job.tohelp-generator.name} \
-  --region=${var.region} \
-  --project=${var.project_id}
-EOT
-  }
+provisioner "local-exec" {
+  command = "gcloud run jobs execute ${var.job_name_solicitantes} --region=${var.region} --project=${var.project_id}"
+}
 }
