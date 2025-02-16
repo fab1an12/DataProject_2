@@ -25,20 +25,27 @@ def generador_telefonos():
     return f"6{random.randint(10000000, 99999999)}"
 
 def generar_coordenadas_aleatorias():
-    latitud = random.uniform(39.0, 40.1)
-    longitud = random.uniform(-0.6, -0.15)
+    latitud = random.uniform(39.38, 39.46)
+    longitud = random.uniform(-0.45, -0.34)
     return latitud, longitud
 
 def identificar_pueblo(lat, lon):
-    geolocator = Nominatim(user_agent="ayudante_geocoder")
-    try:
-        time.sleep(1)
-        location = geolocator.reverse((lat, lon), language="es")
-        if location and location.raw and "address" in location.raw:
-            address = location.raw["address"]
-            return address.get("city") or address.get("town") or address.get("village")
-    except Exception as e:
-        print("Error en reverse geocoding:", e)
+    # Definir rangos de coordenadas para cada pueblo
+    pueblos = {
+        'Paiporta': ((39.40, 39.42), (-0.40, -0.38)),
+        'Picanya': ((39.41, 39.43), (-0.42, -0.40)),
+        'Benetússer': ((39.39, 39.41), (-0.38, -0.36)),
+        'Aldaia': ((39.43, 39.45), (-0.45, -0.43)),
+        'Torrent': ((39.42, 39.44), (-0.43, -0.41)),
+        'Quart de Poblet': ((39.44, 39.46), (-0.41, -0.39)),
+        'Mislata': ((39.38, 39.40), (-0.36, -0.34)),
+        'Xirivella': ((39.41, 39.43), (-0.38, -0.36))
+    }
+    
+    for pueblo, ((lat_min, lat_max), (lon_min, lon_max)) in pueblos.items():
+        if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
+            return pueblo
+    
     return "Valencia"
 
 def generador_solicitantes():
