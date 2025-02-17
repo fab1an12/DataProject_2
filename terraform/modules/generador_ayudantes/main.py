@@ -33,7 +33,7 @@ def identificar_pueblo(lat, lon):
     pueblos = {
         'Paiporta': ((39.40, 39.42), (-0.40, -0.38)),
         'Picanya': ((39.41, 39.43), (-0.42, -0.40)),
-        'Benetússer': ((39.39, 39.41), (-0.38, -0.36)),
+        'Benetusser': ((39.39, 39.41), (-0.38, -0.36)),
         'Aldaia': ((39.43, 39.45), (-0.45, -0.43)),
         'Torrent': ((39.42, 39.44), (-0.43, -0.41)),
         'Quart de Poblet': ((39.44, 39.46), (-0.41, -0.39)),
@@ -99,4 +99,5 @@ def generador_ayudantes():
 
 if __name__ == "__main__":
     while True:
+        time.sleep(10)
         generador_ayudantes()

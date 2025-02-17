@@ -100,4 +100,5 @@ def generador_solicitantes():
     time.sleep(2)
 if __name__ == "__main__":
     while True:
+        time.sleep(10)
         generador_solicitantes()

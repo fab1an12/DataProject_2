@@ -1,28 +1,54 @@
+import json
+from datetime import datetime
+from geopy.geocoders import Nominatim
 from typing import Type
 from pydantic import BaseModel, Field
 from langchain.tools import BaseTool
 from google.cloud import pubsub_v1
 
 class PubSubPayload(BaseModel):
-    topic_name: str = Field(..., description="Nombre del topic en Pub/Sub (formato projects/xxx/topics/xxx)")
-    user_id: str = Field(..., description="ID del usuario o chat")
-    important_data: str = Field(..., description="Dato importante a enviar a Pub/Sub")
+    nombre: str = Field(..., description="Name of the person in need of help")
+    tipo_necesidad: str = Field(..., description="Type of help needed: Agua, Alimentos, Medicamentos, u Otros.")
+    necesidad_especifica: str = Field(..., description="Specific help item chosen within the type of need.")
+    pueblo: str = Field(..., description="Town or city where the user is located.")
 
 class PubSubTool(BaseTool):
-    # Se agregan las anotaciones de tipo a los atributos sobrescritos
     name: str = "pubsub_tool"
     description: str = (
-        "Usar esta herramienta para publicar un evento en Pub/Sub. "
-        "Debes proveer un topic_name y los campos user_id y important_data."
+        "Use this tool to publish an emergency event to Pub/Sub. "
+        "You must provide the chat ID,the name, the type of need, the specific need and the town."
     )
     args_schema: Type[BaseModel] = PubSubPayload
 
-    def _run(self, topic_name: str, user_id: str, important_data: str) -> str:
+    def _run(self,nombre: str,tipo_necesidad: str,necesidad_especifica: str,pueblo: str) -> str:
+        geolocator = Nominatim(user_agent="geoapi")
+        location = geolocator.geocode(pueblo)
+        datos = {
+            "id": "696727663",
+            "Nombre": nombre,
+            "Contacto": "632826643",     
+            "Tipo de ayuda": tipo_necesidad,
+            "Ayuda específica": necesidad_especifica,
+            "Nivel de urgencia": 5,
+            "Ubicación": {
+                "pueblo": pueblo,
+                "Latitud": location.latitude,
+                "Longitud": location.longitude
+            },
+            "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Autogenerado": False,
+            "Nº intentos": 0
+        }
+
+        data_str = json.dumps(datos, ensure_ascii=False)
+
+        topic_name = "projects/edem24-25/topics/tohelp_topic"
+
         publisher = pubsub_v1.PublisherClient()
-        data_str = f"User: {user_id}, Data: {important_data}"
         future = publisher.publish(topic_name, data=data_str.encode("utf-8"))
         message_id = future.result()
+
         return f"Message published with ID: {message_id}"
 
-    async def _arun(self, *args, **kwargs):
+    async def _arun(self, *args, **kwargs) -> str:
         raise NotImplementedError("Async not implemented for PubSubTool")
