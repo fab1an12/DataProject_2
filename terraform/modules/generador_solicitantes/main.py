@@ -81,12 +81,13 @@ def generador_solicitantes():
         "Ayuda específica": necesidad_especifica,
         "Nivel de urgencia": random.randint(1, 5),
         "Ubicación": {
-            "pueblo": pueblo,
+            "Pueblo": pueblo,
             "Latitud": latitud,
             "Longitud": longitud
         },
-        "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),        
-        "Nº intentos": 0
+        "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  
+        "Autogenerado": True,
+        "Nº_intentos": 0
 
     }
 
@@ -96,7 +97,7 @@ def generador_solicitantes():
 
     logging.info(f"Ayuda enviada a Pub/Sub con ID: {message_id}")
     logging.info(f"Datos enviados: {datos_json}")
-
+    time.sleep(2)
 if __name__ == "__main__":
     while True:
         generador_solicitantes()

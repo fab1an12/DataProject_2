@@ -80,13 +80,13 @@ def generador_ayudantes():
         "Necesidad específica": necesidad_especifica,
         "Nivel de urgencia": random.randint(1, 5),
         "Ubicación": {
-            "pueblo": pueblo,
+            "Pueblo": pueblo,
             "Latitud": latitud,
             "Longitud": longitud
         },
         "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "Autogenerado": True,
-        "Nº intentos": 0
+        "Nº_intentos": 0
     }
 
     datos_json = json.dumps(datos, ensure_ascii=False)
@@ -95,6 +95,7 @@ def generador_ayudantes():
 
     logging.info(f"Ayuda enviada a Pub/Sub con ID: {message_id}")
     logging.info(f"Datos enviados: {datos_json}")
+    time.sleep(2)
 
 if __name__ == "__main__":
     while True:
