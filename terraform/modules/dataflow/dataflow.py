@@ -14,26 +14,8 @@ logging.getLogger("apache_beam.utils.subprocess_server").setLevel(logging.ERROR)
 def ParsePubSubMessages(message): 
     pubsub_message = message.decode('utf-8')
     msg = json.loads(pubsub_message)
-    logging.info(f"Mensaje parseado: {msg}")
-    location = msg.get('Ubicación', {})
-    normalized_msg = {
-            'id': msg.get('id'),
-            'name': msg.get('Nombre') or msg.get('name'),
-            'contact': msg.get('Contacto') or msg.get('contact'),
-            'necessity': msg.get('Tipo de ayuda') or msg.get('Tipo de necesidad') or msg.get('necessity'),
-            'specific_need': msg.get('Ayuda específica') or msg.get('Necesidad específica') or msg.get('specific_need'),
-            'urgency': int(msg.get('Nivel de urgencia',1)) or int(msg.get('urgency',1)),
-            'city': location.get('Pueblo') or msg.get('city'),
-            'location': {
-                'latitude': float(location.get('Latitud',0)) or msg.get('latitude',0),
-                'longitude': float(location.get('Longitud',0)) or msg.get('longitude',0)
-            },
-            'date': msg.get('Fecha') or msg.get('date'),
-            'retry_count': int(msg.get('Nº_intentos', 0)) or int(msg.get('retry_count', 0)),
-            'is_auto_generated': msg.get('Autogenerado', True) or msg.get('is_auto_generated', True)
-        }
-    logging.info(f"Mensaje normalizado: {normalized_msg}")
-    return normalized_msg
+    logging.info(f"Message received: {msg}")
+    return msg
 
 def increment_processed(record):
     record['retry_count'] = record.get('retry_count', 0) + 1
@@ -146,8 +128,8 @@ def run():
         runner = "DataflowRunner",
         job_name = "cloudia"
     )
-    matched_table_id   = f"{args.project_id}:{args.bq_dataset}.marched"
-    unmatched_table_id = f"{args.project_id}:{args.bq_dataset}.unmatched"
+    matched_table_id   = f"{args.project_id}:{args.bq_dataset}.successful_matches"
+    unmatched_table_id = f"{args.project_id}:{args.bq_dataset}.failed_matches"
 
     # Esquemas para BigQuery
     matched_schema = {
@@ -238,31 +220,31 @@ def run():
             )
         )
     
-        # Procesar no matcheados y re-publicar aquellos con processed < 7
-        unmatched_affected_less_2 = unmatched_affected_pcoll | "FilterAff<2" >> beam.Filter(lambda x: x.get('processed', 0) < 2)
-        unmatched_affected_ge_2   = unmatched_affected_pcoll | "FilterAff>=2" >> beam.Filter(lambda x: x.get('processed', 0) >= 2)
+        # Procesar no matcheados y re-publicar aquellos con processed < 3
+        unmatched_affected_less_3 = unmatched_affected_pcoll | "FilterAff<3" >> beam.Filter(lambda x: x.get('retry_count', 0) < 3)
+        unmatched_affected_ge_3   = unmatched_affected_pcoll | "FilterAff>=3" >> beam.Filter(lambda x: x.get('retry_count', 0) >= 3)
     
-        unmatched_volunteer_less_2 = unmatched_volunteer_pcoll | "FilterVol<2" >> beam.Filter(lambda x: x.get('processed', 0) < 2)
-        unmatched_volunteer_ge_2   = unmatched_volunteer_pcoll | "FilterVol>=2" >> beam.Filter(lambda x: x.get('processed', 0) >= 2)
+        unmatched_volunteer_less_3 = unmatched_volunteer_pcoll | "FilterVol<3" >> beam.Filter(lambda x: x.get('retry_count', 0) < 3)
+        unmatched_volunteer_ge_3   = unmatched_volunteer_pcoll | "FilterVol>=3" >> beam.Filter(lambda x: x.get('retry_count', 0) >= 3)
     
         (
-            unmatched_affected_less_2
-            | "ReEncodeAff<2" >> beam.Map(lambda x: json.dumps(x).encode('utf-8'))
-            | "RePublishAff<2" >> beam.io.WriteToPubSub(topic=f"projects/{args.project_id}/topics/tohelp_topic")
+            unmatched_affected_less_3
+            | "ReEncodeAff<3" >> beam.Map(lambda x: json.dumps(x).encode('utf-8'))
+            | "RePublishAff<3" >> beam.io.WriteToPubSub(topic=f"projects/{args.project_id}/topics/tohelp_topic")
         )
         (
-            unmatched_volunteer_less_2
-            | "ReEncodeVol<2" >> beam.Map(lambda x: json.dumps(x).encode('utf-8'))
-            | "RePublishVol<2" >> beam.io.WriteToPubSub(topic=f"projects/{args.project_id}/topics/helpers_topic")
+            unmatched_volunteer_less_3
+            | "ReEncodeVol<3" >> beam.Map(lambda x: json.dumps(x).encode('utf-8'))
+            | "RePublishVol<3" >> beam.io.WriteToPubSub(topic=f"projects/{args.project_id}/topics/helpers_topic")
         )
     
-        unmatched_ge_2 = (
-            (unmatched_affected_ge_2, unmatched_volunteer_ge_2)
+        unmatched_ge_3 = (
+            (unmatched_affected_ge_3, unmatched_volunteer_ge_3)
             | "FlattenUnmatched>=2" >> beam.Flatten()
         )
     
         (
-            unmatched_ge_2
+            unmatched_ge_3
             | "FormatUnmatchedForBQ" >> beam.Map(format_unmatched_for_bq)
             | "WriteUnmatchedToBQ" >> WriteToBigQuery(
                 table=unmatched_table_id,
@@ -274,7 +256,7 @@ def run():
         
         matched_non_auto = (
             matched_pcoll
-            | "FilterNonAuto" >> beam.Filter(lambda x: x.get("afectado", {}).get("is_auto_generated", True) is False)
+            | "FilterNonAuto" >> beam.Filter(lambda x: x.get("affected", {}).get("is_auto_generated", True) is False)
         )
 
         (

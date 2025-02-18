@@ -29,24 +29,36 @@ def generar_coordenadas_aleatorias():
     longitud = random.uniform(-0.45, -0.34)
     return latitud, longitud
 
+# def identificar_pueblo(lat, lon):
+#     # Definir rangos de coordenadas para cada pueblo
+#     pueblos = {
+#         'Paiporta': ((39.40, 39.42), (-0.40, -0.38)),
+#         'Picanya': ((39.41, 39.43), (-0.42, -0.40)),
+#         'Benetusser': ((39.39, 39.41), (-0.38, -0.36)),
+#         'Aldaia': ((39.43, 39.45), (-0.45, -0.43)),
+#         'Torrent': ((39.42, 39.44), (-0.43, -0.41)),
+#         'Quart de Poblet': ((39.44, 39.46), (-0.41, -0.39)),
+#         'Mislata': ((39.38, 39.40), (-0.36, -0.34)),
+#         'Xirivella': ((39.41, 39.43), (-0.38, -0.36))
+#     }
+    
+#     for pueblo, ((lat_min, lat_max), (lon_min, lon_max)) in pueblos.items():
+#         if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
+#             return pueblo
+    
+#     return "Paiporta"
+
 def identificar_pueblo(lat, lon):
-    # Definir rangos de coordenadas para cada pueblo
-    pueblos = {
-        'Paiporta': ((39.40, 39.42), (-0.40, -0.38)),
-        'Picanya': ((39.41, 39.43), (-0.42, -0.40)),
-        'Benetússer': ((39.39, 39.41), (-0.38, -0.36)),
-        'Aldaia': ((39.43, 39.45), (-0.45, -0.43)),
-        'Torrent': ((39.42, 39.44), (-0.43, -0.41)),
-        'Quart de Poblet': ((39.44, 39.46), (-0.41, -0.39)),
-        'Mislata': ((39.38, 39.40), (-0.36, -0.34)),
-        'Xirivella': ((39.41, 39.43), (-0.38, -0.36))
-    }
-    
-    for pueblo, ((lat_min, lat_max), (lon_min, lon_max)) in pueblos.items():
-        if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
-            return pueblo
-    
-    return "Valencia"
+    geolocator = Nominatim(user_agent="ayudante_geocoder")
+    try:
+        time.sleep(1)
+        location = geolocator.reverse((lat, lon), language="es")
+        if location and location.raw and "address" in location.raw:
+            address = location.raw["address"]
+            return address.get("city") or address.get("town") or address.get("village")
+    except Exception as e:
+        print("Error en reverse geocoding:", e)
+    return None
 
 def generador_solicitantes():
     latitud, longitud = generar_coordenadas_aleatorias()
@@ -75,20 +87,19 @@ def generador_solicitantes():
     necesidad_especifica = random.choice(recursos_ofrecidos[tipo_necesidad]["items"])
     datos = {
         "id": "A-" + str(uuid.uuid4()),
-        "Nombre": generador_nombres(),
-        "Contacto": generador_telefonos(),
-        "Tipo de ayuda": tipo_necesidad,
-        "Ayuda específica": necesidad_especifica,
-        "Nivel de urgencia": random.randint(1, 5),
-        "Ubicación": {
-            "Pueblo": pueblo,
-            "Latitud": latitud,
-            "Longitud": longitud
+        "name": generador_nombres(),
+        "contact": generador_telefonos(),
+        "necessity": tipo_necesidad,
+        "specific_need": necesidad_especifica,
+        "urgency": random.randint(1, 5),
+        "city": pueblo,
+        "location": {
+            "latitude": latitud,
+            "longitude": longitud
         },
-        "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  
-        "Autogenerado": True,
-        "Nº_intentos": 0
-
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  
+        "retry_count": 0,
+        "is_auto_generated": True
     }
 
     datos_json = json.dumps(datos, ensure_ascii=False)
@@ -100,5 +111,5 @@ def generador_solicitantes():
     time.sleep(2)
 if __name__ == "__main__":
     while True:
-        time.sleep(10)
+        time.sleep(2)
         generador_solicitantes()

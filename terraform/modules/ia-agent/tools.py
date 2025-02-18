@@ -25,19 +25,19 @@ class PubSubTool(BaseTool):
         location = geolocator.geocode(pueblo)
         datos = {
             "id": "696727663",
-            "Nombre": nombre,
-            "Contacto": "632826643",     
-            "Tipo de ayuda": tipo_necesidad,
-            "Ayuda específica": necesidad_especifica,
-            "Nivel de urgencia": 5,
-            "Ubicación": {
-                "pueblo": pueblo,
-                "Latitud": location.latitude,
-                "Longitud": location.longitude
+            "name": nombre,
+            "contact": "632826643",     
+            "necessity": tipo_necesidad,
+            "specific_need": necesidad_especifica,
+            "urgency": 5,
+            "city": pueblo,
+            "location": {
+                "latitude": location.latitude,
+                "longitude": location.longitude
             },
-            "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "Autogenerado": False,
-            "Nº intentos": 0
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "retry_count": 0,
+            "is_auto_generated": False,
         }
 
         data_str = json.dumps(datos, ensure_ascii=False)
