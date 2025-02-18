@@ -11,3 +11,5 @@ google-cloud-firestore
 requests
 langchain_community
 Flask[async]==2.2.2
+geopy
+typing

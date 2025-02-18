@@ -27,27 +27,27 @@ module "injector" {
   telegram_name      = module.telegram_api.telegram_name
   depends_on         = [module.ia-agent, module.telegram_api]
 }
-# module "generador_ayudantes" {
-#   source             = "./modules/generador_ayudantes"
-#   project_id         = var.project_id
-#   region             = var.region
-#   repository_name_ayudantes = var.repository_name_ayudantes
-#   job_name_ayudantes = var.job_name_ayudantes
-#   topic_name_help = var.topic_name_help
-#   depends_on = [module.pubsub]
-# }
-# module "generador_solicitantes" {
-#   source             = "./modules/generador_solicitantes"
-#   project_id         = var.project_id
-#   region             = var.region
-#   repository_name_solicitantes = var.repository_name_solicitantes
-#   job_name_solicitantes =   var.job_name_solicitantes
-#   topic_name_tohelp = var.topic_name_tohelp
-#   depends_on = [module.pubsub]
-# }
-# module "pubsub" {
-#   source             = "./modules/pubsub"
-#   project_id         = var.project_id
-#   topic_name_help = var.topic_name_help
-#   subscription_name_help = var.subscription_name_help
-# }
+module "generador_ayudantes" {
+  source             = "./modules/generador_ayudantes"
+  project_id         = var.project_id
+  region             = var.region
+  repository_name_ayudantes = var.repository_name_ayudantes
+  job_name_ayudantes = var.job_name_ayudantes
+  topic_name_help = var.topic_name_help
+  depends_on = [module.pubsub]
+}
+module "generador_solicitantes" {
+  source             = "./modules/generador_solicitantes"
+  project_id         = var.project_id
+  region             = var.region
+  repository_name_solicitantes = var.repository_name_solicitantes
+  job_name_solicitantes =   var.job_name_solicitantes
+  topic_name_tohelp = var.topic_name_tohelp
+  depends_on = [module.pubsub]
+}
+module "pubsub" {
+  source             = "./modules/pubsub"
+  project_id         = var.project_id
+  topic_name_help = var.topic_name_help
+  subscription_name_help = var.subscription_name_help
+}
